@@ -1,7 +1,8 @@
 import tensorflow as tf
 import numpy as np
 from tqdm import tqdm
-from tf_utils import logger
+
+from tfutils import logger
 import pickle as pkl
 import os
 # from .vfae import VariationalFairClassifier, VariationalFairAutoEncoder
@@ -41,11 +42,18 @@ class LagrangianFairTransferableAutoEncoder(VariationalAutoEncoder):
         self.qu = tfd.Bernoulli(probs=tf.reduce_mean(tf.cast(u_, tf.float32), axis=0))
         self.um = tf.reduce_mean(tf.cast(u_, tf.float32) - tf.cast(self.u, tf.float32))
         logquz = self.qu.log_prob(u_)
+        #classififcation error as mentioned in appendix c. not important
         self.vae = vae = tf.reduce_mean(logqzx - logpxz - logpz)  # vae loss (consistency constraints)
+        #e1 bound
+        #qzx is q(z|x,u)in the paper
         self.elbo = elbo = tf.reduce_mean(logqzx - logpz)
+        #-log p(x|z,u) This is the lower bound in the paper
         self.lld = lld = tf.reduce_mean(-logpxz)  # reconstruction error
+        #estimated upper bound - epsilon 2 in paper. in paper it's negative of this
         self.mi_z_u = mi_z_u = tf.reduce_mean(logqu - logpuz)  # estimated mutual information upper bound
+        #boolean mask masks the first argument against the second argument. Where y=0 is kept
         self.mi_z_u0 = self.mi_z_u0t = tf.boolean_mask(logqu0 - logpuz, tf.equal(self.y, 0))
+        #where y = 1 is kept
         self.mi_z_u1 = self.mi_z_u1t = tf.boolean_mask(logqu1 - logpuz, tf.equal(self.y, 1))
 
         self.mi_z_u0, self.mi_z_u1 = tf.reduce_mean(self.mi_z_u0), tf.reduce_mean(self.mi_z_u1)
@@ -64,6 +72,8 @@ class LagrangianFairTransferableAutoEncoder(VariationalAutoEncoder):
                 return tf.get_variable(name, shape=[], dtype=tf.float32,
                                        initializer=tf.constant_initializer(0.0), trainable=False)
 
+
+        #True for L-MIFR (false by default)
         if self.lagrangian:
             self.l1 = _get_lambda('lambda1', self.e1)
             self.l2 = _get_lambda('lambda2', self.e2)
@@ -72,12 +82,17 @@ class LagrangianFairTransferableAutoEncoder(VariationalAutoEncoder):
             self.l5 = _get_lambda('lambda5', self.e5)
             self.loss = self.mi * lld + self.l1 * elbo + self.l2 * mi_z_u + self.l3 * vae + self.l4 * (self.mi_z_u0 + self.mi_z_u1) / 2 + self.l5 * self.mi_z_u1\
                         - self.l1 * self.e1 - self.l2 * self.e2 - self.l3 * self.e3 - self.l4 * self.e4 - self.l5 * self.e5
+
+        #MIFR (fixed multipliers). This is the default
         else:
             self.l1 = tf.get_variable('lambda1', shape=[], dtype=tf.float32, initializer=tf.constant_initializer(self.e1))
             self.l2 = tf.get_variable('lambda2', shape=[], dtype=tf.float32, initializer=tf.constant_initializer(self.e2))
             self.l3 = tf.get_variable('lambda3', shape=[], dtype=tf.float32, initializer=tf.constant_initializer(self.e3))
             self.l4 = tf.get_variable('lambda4', shape=[], dtype=tf.float32, initializer=tf.constant_initializer(self.e4))
             self.l5 = tf.get_variable('lambda5', shape=[], dtype=tf.float32, initializer=tf.constant_initializer(self.e5))
+           #default: mi is 0. l1 is 1, all others are 0
+            #default is just the e1 bound times epsilon 1
+            #what is mi and why is it 0 by default?
             self.loss = self.mi * lld + self.l1 * elbo + self.l2 * mi_z_u + self.l3 * vae
 
     def _create_optimizer(self, encoder, decoder, optimizer):
@@ -165,6 +180,9 @@ class LagrangianFairTransferableAutoEncoder(VariationalAutoEncoder):
         from sklearn.linear_model import LogisticRegression
 
         lr = LogisticRegression()
+
+        #(zs-zsm)/zss is the input, ys is the output
+        #here z is normalize by subtracting mean and dividing by standard deviation
         lr.fit((zs - zsm) / zss, ys)
         ys_ = lr.predict((zs - zsm) / zss)
 
@@ -193,6 +211,7 @@ class LagrangianFairTransferableAutoEncoder(VariationalAutoEncoder):
         with open(os.path.join(self.logdir, 'class.pkl'), 'wb') as f:
             pkl.dump([ys, ys_], f)
 
+        #adds these entries to the previously created dictionary d
         d.update({
             'test_auc': roc_auc_score(ys, ys_),
             'test_dp': demographic_parity(ys_, us),
@@ -234,13 +253,23 @@ class LagrangianFairTransferableAutoEncoder(VariationalAutoEncoder):
         while True:
             try:
                 z_mi, u, qzx = self.sess.run([z_var, u_var, qzx_var])
+                #reshape with -1 means new dimensions are unknown
                 u = np.reshape(u, [-1])
+                #np.nonzero() returns the indices of the nonzero elements
+                #indices where u is 0
                 zs[0].append(z_mi[np.nonzero(1 - u)])
+                #indices where u is 1
                 zs[1].append(z_mi[np.nonzero(u)])
             except tf.errors.OutOfRangeError:
                 break
+        #join sequence of arrays into 1 array. 1 row
+        #z given u is 0
         zs[0] = np.concatenate(zs[0], axis=0)
+        #z given u is 1
         zs[1] = np.concatenate(zs[1], axis=0)
+        #kernel density estimation. estimates pdf
+        #input is zs[0]- the datapoints to estimate from
+        #estimate q(z|u)
         kde = [gaussian_kde(zs[0].transpose()), gaussian_kde(zs[1].transpose())]
         kde[0].set_bandwidth('silverman')
         kde[1].set_bandwidth('silverman')
@@ -253,7 +282,9 @@ class LagrangianFairTransferableAutoEncoder(VariationalAutoEncoder):
             try:
                 z, lqzx, u, y = self.sess.run([z_var, qzx_var, u_var, y_var])
                 u = np.reshape(u, [-1])
+                #indices where u is 0 and u is 1
                 idx = [np.nonzero(1.0 - u), np.nonzero(u)]
+
                 mi = lqzx[idx[0]] - kde[0].logpdf(z[idx[0]].transpose())
                 y = np.reshape(y, [-1])
                 for i in range(idx[0][0].__len__()):
@@ -269,7 +300,7 @@ class LagrangianFairTransferableAutoEncoder(VariationalAutoEncoder):
                         mi1.append(mi[i])
             except tf.errors.OutOfRangeError:
                 break
-
+        #I(x;z|u)
         d = {'mi_' + label: np.mean(mi0 + mi1)}
         self._write_evaluation(d)
 

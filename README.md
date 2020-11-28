@@ -22,7 +22,7 @@ pip install -e .
 
 ### Running MIFR (Adult)
 ```
-python -m exmaples.adult
+python -m examples.adult
 ```
 
 ### Running L-MIFR (Adult)

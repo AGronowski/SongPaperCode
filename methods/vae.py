@@ -2,9 +2,10 @@ import tensorflow as tf
 import numpy as np
 import pickle as pkl
 import os
+from tfutils.utils import gpu_session
 from scipy.stats import gaussian_kde
 
-from tf_utils import logger, gpu_session, clear_dir
+#from tf_utils import logger, gpu_session, clear_dir
 
 tfd = tf.contrib.distributions
 
@@ -25,7 +26,7 @@ class VariationalAutoEncoder(object):
         self._create_summary()
         self._create_evaluation(encoder, decoder)
         self._create_session(logdir)
-        logger.configure(logdir, format_strs=['stdout', 'log'])
+        #logger.configure(logdir, format_strs=['stdout', 'log'])
 
     def _create_datasets(self):
         datasets = self.datasets
@@ -86,7 +87,7 @@ class VariationalAutoEncoder(object):
     def _log(self, it):
         if it % 10 == 0:
             loss, nll, elbo = self.sess.run([self.loss, self.nll, self.elbo])
-            logger.log("Iteration %d: loss %.4f nll %.4f elbo %.4f" % (it, loss, nll, elbo))
+            #logger.log("Iteration %d: loss %.4f nll %.4f elbo %.4f" % (it, loss, nll, elbo))
             self.summary_writer.add_summary(self.sess.run(self.train_summary), it)
 
     def train(self, num_epochs, num_iters=None):
@@ -104,6 +105,9 @@ class VariationalAutoEncoder(object):
                     break
                 if num_iters and it > num_iters:
                     break
+            if epoch % 10 == 0:
+                print("current epoch is " + str(epoch))
+
             if epoch % 100 == 1:
                 print('Saving to: ', os.path.join(self.logdir, 'model/model.ckpt'))
                 self.saver.save(sess=self.sess, save_path=os.path.join(self.logdir, 'model/model.ckpt'))
@@ -222,8 +226,11 @@ class VariationalAutoEncoder(object):
         self._write_evaluation(d)
 
     def _write_evaluation(self, d):
-        logger.logkvs(d)
-        logger.dumpkvs()
+        #logger.logkvs(d)
+        #logger.dumpkvs()
+        print('printing evaluation:')
+        print(d)
+
         try:
             with open(os.path.join(self.logdir, 'eval.pkl'), 'rb') as f:
                 d_ = pkl.load(f)

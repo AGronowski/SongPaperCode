@@ -2,7 +2,7 @@ import tensorflow as tf
 import numpy as np
 from scipy.stats import gaussian_kde
 from tqdm import tqdm
-from tf_utils import logger, gpu_session, clear_dir
+from tfutils import *
 
 
 from .vae import VariationalAutoEncoder
