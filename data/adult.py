@@ -32,7 +32,7 @@ def save_adult_datasets():
         return df
 
     #create list containing all labels for every category
-    #if column contains strings than all unique strings are listed,
+    #if column contains strings then all unique strings are listed,
     #else the median is listed
     def gather_labels(df):
         labels = []

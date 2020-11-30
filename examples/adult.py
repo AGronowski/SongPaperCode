@@ -12,9 +12,7 @@ class VariationalEncoder(object):
     def __init__(self, z_dim=10):
         #x is input images
         def encoder_func(x):
-            #50 node hidden layer of neural network
             fc1 = tf.layers.dense(x, 50, activation=tf.nn.softplus)
-            #10 node output layer
             mean = tf.layers.dense(fc1, z_dim, activation=tf.identity)
             logstd = tf.layers.dense(fc1, z_dim, activation=tf.identity)
             return mean, tf.exp(logstd)

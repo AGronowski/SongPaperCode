@@ -182,7 +182,7 @@ class LagrangianFairTransferableAutoEncoder(VariationalAutoEncoder):
         lr = LogisticRegression()
 
         #(zs-zsm)/zss is the input, ys is the output
-        #here z is normalize by subtracting mean and dividing by standard deviation
+        #here z is normalized by subtracting mean and dividing by standard deviation
         lr.fit((zs - zsm) / zss, ys)
         ys_ = lr.predict((zs - zsm) / zss)
 
