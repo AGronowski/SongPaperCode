@@ -10,7 +10,7 @@ from sklearn.model_selection import train_test_split
 # adult variable must be set to False in data.adult and examples.adult
 
 
-def save_adult_datasets():
+def save_mh_datasets():
     # header is removed automatically (header=0)
     df = pd.read_csv('imputed_cleaned_mental_health.csv')
 
@@ -69,4 +69,4 @@ def save_adult_datasets():
 
 
 if __name__ == '__main__':
-    save_adult_datasets()
+    save_mh_datasets()
