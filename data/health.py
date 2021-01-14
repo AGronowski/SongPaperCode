@@ -2,7 +2,6 @@ import numpy as np
 import tensorflow as tf
 import pandas as pd
 
-
 tfd = tf.contrib.distributions
 
 

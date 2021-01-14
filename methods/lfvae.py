@@ -27,6 +27,7 @@ class LagrangianFairTransferableAutoEncoder(VariationalAutoEncoder):
         self.disc = disc
         self.e1, self.e2, self.e3, self.e4, self.e5, self.mi = e1, e2, e3, e4, e5, mi
         self.global_step=None
+        #Python2 syntax. in python3 argument isn't needed
         super(LagrangianFairTransferableAutoEncoder, self).__init__(encoder, decoder, datasets, optimizer, logdir)
 
     def _create_loss(self):
@@ -42,7 +43,7 @@ class LagrangianFairTransferableAutoEncoder(VariationalAutoEncoder):
         self.qu = tfd.Bernoulli(probs=tf.reduce_mean(tf.cast(u_, tf.float32), axis=0))
         self.um = tf.reduce_mean(tf.cast(u_, tf.float32) - tf.cast(self.u, tf.float32))
         logquz = self.qu.log_prob(u_)
-        #classififcation error as mentioned in appendix c. not important
+        #classififcation error as mentioned in appendix c?
         self.vae = vae = tf.reduce_mean(logqzx - logpxz - logpz)  # vae loss (consistency constraints)
         #e1 bound
         #qzx is q(z|x,u)in the paper
@@ -51,6 +52,10 @@ class LagrangianFairTransferableAutoEncoder(VariationalAutoEncoder):
         self.lld = lld = tf.reduce_mean(-logpxz)  # reconstruction error
         #estimated upper bound - epsilon 2 in paper. in paper it's negative of this
         self.mi_z_u = mi_z_u = tf.reduce_mean(logqu - logpuz)  # estimated mutual information upper bound
+
+        #MY MODIFICATION
+        self.mi_z_u = tf.reduce_mean(logpuz - logqu)
+
         #boolean mask masks the first argument against the second argument. Where y=0 is kept
         self.mi_z_u0 = self.mi_z_u0t = tf.boolean_mask(logqu0 - logpuz, tf.equal(self.y, 0))
         #where y = 1 is kept
@@ -61,15 +66,17 @@ class LagrangianFairTransferableAutoEncoder(VariationalAutoEncoder):
         self.logqu0 = tf.reduce_mean(logqu0)
         self.logqu1 = tf.reduce_mean(logqu1)
         self.logqy = tf.reduce_mean(qy.log_prob(self.y))  # classification error
-        self.y_ = qy.logits
+        self.y_ = qy.logits #qy is bernoulli distribution
         self.u_ = u_
 
         def _get_lambda(name, e):
             if e > 0:
+                #get_variable is used to create variables if they don't exist, otherwise returns the variable
                 return tf.get_variable(name, shape=[], dtype=tf.float32,
                                        initializer=tf.constant_initializer(1.0), trainable=True)
             else:
                 return tf.get_variable(name, shape=[], dtype=tf.float32,
+                                       #trainable=False means the variable can't be modified during training
                                        initializer=tf.constant_initializer(0.0), trainable=False)
 
 
@@ -85,6 +92,7 @@ class LagrangianFairTransferableAutoEncoder(VariationalAutoEncoder):
 
         #MIFR (fixed multipliers). This is the default
         else:
+            #get variable gets existing variable or creates new one if one doesn't exist
             self.l1 = tf.get_variable('lambda1', shape=[], dtype=tf.float32, initializer=tf.constant_initializer(self.e1))
             self.l2 = tf.get_variable('lambda2', shape=[], dtype=tf.float32, initializer=tf.constant_initializer(self.e2))
             self.l3 = tf.get_variable('lambda3', shape=[], dtype=tf.float32, initializer=tf.constant_initializer(self.e3))
@@ -93,21 +101,37 @@ class LagrangianFairTransferableAutoEncoder(VariationalAutoEncoder):
            #default: mi is 0. l1 is 1, all others are 0
             #default is just the e1 bound times epsilon 1
             #what is mi and why is it 0 by default?
+
+            #lld = tf.reduce_mean(-logpxz)  negative of lower bound for I(X;U|Z) to be maximized
+
+            #e1 and e2 both bounds on I(Z;U)
+            #elbo = tf.reduce_mean(logqzx - logpz). true upper bound that prioritizes fairness
+            #mi_z_u = tf.reduce_mean(logqu - logpuz). tighter upper bound that prioritizes expressiveness
+
+            #seems vae is classification error from Appendix C. e3 is 0 and this isn't used
             self.loss = self.mi * lld + self.l1 * elbo + self.l2 * mi_z_u + self.l3 * vae
 
     def _create_optimizer(self, encoder, decoder, optimizer):
+
         encoder_grads_and_vars = optimizer.compute_gradients(self.loss, encoder.vars)
         decoder_grads_and_vars = optimizer.compute_gradients(self.loss, decoder.vars)
         disc_grads_and_vars = optimizer.compute_gradients(-self.logqu - self.logqu0 - self.logqu1, encoder.discriminate_vars)
         print(encoder.discriminate_vars)
 
         global_step = self.global_step
+        # tf.group evaluates 2 things at once
+        # apply_gradients updates the weights
+        #global_step is None
         self.trainer = tf.group(optimizer.apply_gradients(encoder_grads_and_vars, global_step=global_step),
                                 optimizer.apply_gradients(decoder_grads_and_vars))
         self.adversary = optimizer.apply_gradients(disc_grads_and_vars, global_step=global_step)
         if self.lagrangian:
             lambda_vars = [var for var in [self.l1, self.l2, self.l3, self.l4, self.l5] if var in tf.trainable_variables()]
+            #rmsprop optimizer is similar to stochastic gradient descent with momentum
+            #var list contains the variables that need to be updated to minimize loss
             self.lambda_update = tf.train.RMSPropOptimizer(0.0001).minimize(-self.loss, var_list=lambda_vars)
+            #tf.assign assigns value of second argument to 1st argument
+            #keeps var between 0.01 and 100
             self.lambda_clip = tf.group(
                 [tf.assign(var, tf.minimum(tf.maximum(var, 0.01), 100.0)) for var in lambda_vars]
             )
@@ -119,6 +143,7 @@ class LagrangianFairTransferableAutoEncoder(VariationalAutoEncoder):
         pass
 
     def _create_summary(self):
+        # tf.name_scope adds 'train\' before other names
         with tf.name_scope('train'):
             self.train_summary = tf.summary.merge([
                 tf.summary.scalar('vae', self.vae),
@@ -151,30 +176,41 @@ class LagrangianFairTransferableAutoEncoder(VariationalAutoEncoder):
             logger.log('It %d: loss %.4f lld %.4f vae %.4f mi_z_u %.4f logqu %.4f um %.4f elbo %.4f l1 %.2f l2 %.2f l3 %.2f l4 %.2f l5 %.2f logpz %.2f logqzx %.2f mizu0 %.2f mizu1 %.2f' % (
                 it, loss, lld, vae, mi_z_u, -qu, um, elbo, l1, l2, l3, l4, l5, np.mean(logpz), np.mean(logqzx), mi_z_u0, mi_z_u1
             ))
+            #summary writer created in init of parent class
+            #summary_writer = tf.summary.FileWriter(logdir=logdir)
             self.summary_writer.add_summary(self.sess.run(self.train_summary), it)
 
+    #looks like this function is never called
     def learn_classifier(self):
+        #tqdm creates progress bar
         for _ in tqdm(range(100)):
+            #train init created in init of parent class
+            #initializes iterators on dataset
+            #train_init = iterator.make_initializer(datasets.train)
             self.sess.run(self.train_init)
             while True:
                 try:
-                    self.sess.run(self.classifier)
+                    self.sess.run(self.classifier)#applies gradients
                 except tf.errors.OutOfRangeError:
                     break
-
+    #called by test()
     def evaluate_classifier(self, idx=0):
         self.sess.run(self.train_init)
         zs, ys = [], []
         while True:
             try:
+                #come from _create_loss, called by init of parent
+                #z and y comes from iterator.get_next()
                 z, y = self.sess.run([self.z, self.y])
                 zs.append(z)
                 ys.append(y)
             except tf.errors.OutOfRangeError:
                 break
 
+        #join into 1 row
         zs = np.concatenate(zs, axis=0)
         zsm = np.mean(zs, axis=0)
+        #standard deviation
         zss = np.std(zs, axis=0)
         ys = np.concatenate(ys, axis=0)
         from sklearn.linear_model import LogisticRegression
@@ -192,17 +228,22 @@ class LagrangianFairTransferableAutoEncoder(VariationalAutoEncoder):
             'train_acc': accuracy(ys, ys_)
         }
 
-        self.sess.run(self.test_init)
+        self.sess.run(self.test_init)  #defined in parent. test_init =iterator.make_initializer(datasets.test)
         ys, ys_, us, zs = [], [], [], []
         while True:
             try:
+                #all from _create_loss
+                #y, u come from iterator. z comes from encoder.sample_and_log_prob y_ is logits from encoder.sample_and_log_prob
                 y, y_, u, z = self.sess.run([self.y, self.y_, self.u, self.z])
                 ys.append(y)
                 ys_.append(y_)
+                #idx initially is 0
+                #gives first element in each row, u must be 2D
                 us.append(u[:, idx])
                 zs.append(z)
             except tf.errors.OutOfRangeError:
                 break
+        #-1 means dimension of reshaped is unknown
         ys = np.reshape(np.concatenate(ys, axis=0), [-1])
         ys_ = np.reshape(np.concatenate(ys_, axis=0), [-1])
         us = np.reshape(np.concatenate(us, axis=0), [-1])
@@ -213,14 +254,35 @@ class LagrangianFairTransferableAutoEncoder(VariationalAutoEncoder):
 
         #adds these entries to the previously created dictionary d
         d.update({
+            #comes from sklearn.metrics
+            #ys true label, ys_ predicted label logits
             'test_auc': roc_auc_score(ys, ys_),
+            #comes from utils file
             'test_dp': demographic_parity(ys_, us),
             'test_eodds': equalized_odds(ys, ys_, us),
             'test_eopp': equalizied_opportunity(ys, ys_, us),
             'test_acc': accuracy(ys, ys_)
         })
 
+        #this prints d as well as saving a pickle file
         self._write_evaluation(d)
+
+
+        #write results to file
+
+        mi_z_u = self._evaluate_over_test_set(
+            [self.mi_z_u],
+            ['mi_zu_bound']
+        )
+
+        mi_zx_u = self._estimate_conditional_mutual_information_continuous(self.z, self.logqzx, self.u, self.y)
+
+        try:
+            with open('results_mh_3.txt', 'a') as f:
+                f.write('test_auc: %.8f test_dp: %.8f mi_xz_u: %.8f mi_z_u: %.8f e1:%.1f e2:%.1f  \n' %(d['test_auc'],d['test_dp'],mi_zx_u, mi_z_u,self.e1,self.e2))
+        except IOError:
+            print('not opened')
+        print('wrote to file')
 
     def test(self):
         d = {'mi': self.mi, 'e1': self.e1, 'e2': self.e2, 'e3': self.e3, 'e4': self.e4, 'e5': self.e5, 'disc': self.disc}
@@ -244,6 +306,7 @@ class LagrangianFairTransferableAutoEncoder(VariationalAutoEncoder):
         # self.learn_classifier()
         self.evaluate_classifier()
 
+    #compute I(x;z|u)
     def _estimate_conditional_mutual_information_continuous(self, z_var, qzx_var, u_var, y_var, label='zxiu'):
         self.sess.run(self.train_init)
         zs, mi0, mi1 = [[], []], [], []
@@ -252,6 +315,8 @@ class LagrangianFairTransferableAutoEncoder(VariationalAutoEncoder):
         from sklearn.neighbors import KernelDensity
         while True:
             try:
+                #u_var comes from iterator.get_next()
+                #z_var, logqzx comes from encoder.sample_and_log_prob
                 z_mi, u, qzx = self.sess.run([z_var, u_var, qzx_var])
                 #reshape with -1 means new dimensions are unknown
                 u = np.reshape(u, [-1])
@@ -301,8 +366,12 @@ class LagrangianFairTransferableAutoEncoder(VariationalAutoEncoder):
             except tf.errors.OutOfRangeError:
                 break
         #I(x;z|u)
+        #label is x
         d = {'mi_' + label: np.mean(mi0 + mi1)}
         self._write_evaluation(d)
+        key ='mi_' + label
+        #return I(X;Z|U)
+        return d[key]
 
     def _estimate_conditional_mutual_information_continuous_health(self, z_var, qzx_var, u_var, label='zxiu'):
         self.sess.run(self.train_init)

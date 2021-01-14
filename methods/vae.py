@@ -10,6 +10,8 @@ from scipy.stats import gaussian_kde
 tfd = tf.contrib.distributions
 
 
+
+
 class VariationalAutoEncoder(object):
     """
     Variational Auto Encoder
@@ -29,15 +31,22 @@ class VariationalAutoEncoder(object):
         #logger.configure(logdir, format_strs=['stdout', 'log'])
 
     def _create_datasets(self):
+
+        #datasets is named tuple
+        #Datasets = namedtuple('datasets', ['train', 'test'])
         datasets = self.datasets
+
+        #train is tf.data.Dataset.from_tensor_slices(adult_binary).shuffle(adult_binary[0].shape[0]).batch(batch).prefetch(batch)
         self.iterator = iterator = tf.data.Iterator.from_structure(
             output_types=datasets.train.output_types, output_shapes=datasets.train.output_shapes
         )
+        #initialize iterators on dataset
         self.train_init = iterator.make_initializer(datasets.train)
         self.test_init = iterator.make_initializer(datasets.test)
 
     def _create_loss(self):
         self.x = self.iterator.get_next()[0]
+
         z, logqzx = self.encoder.sample_and_log_prob(self.x)
         x_, logpxz, logpz = self.decoder.sample_and_log_prob(z, self.x)
         self.z = z
@@ -49,15 +58,20 @@ class VariationalAutoEncoder(object):
         self.loss = self.nll + self.elbo
 
     def _create_optimizer(self, encoder, decoder, optimizer):
+        #optimizer is tf.train.AdamOptimizer
         encoder_grads_and_vars = optimizer.compute_gradients(self.loss, encoder.vars)
         decoder_grads_and_vars = optimizer.compute_gradients(self.loss, decoder.vars)
 
+        #tf.group evaluates 2 things at once
+        #apply_gradients updates the weights
         self.trainer = tf.group(optimizer.apply_gradients(encoder_grads_and_vars),
                                 optimizer.apply_gradients(decoder_grads_and_vars))
 
     def _create_summary(self):
+        #tf.name_scope adds 'train\' before other names
         with tf.name_scope('train'):
             self.train_summary = tf.summary.merge([
+                #write scalar summary
                 tf.summary.scalar('elbo', self.elbo),
                 tf.summary.scalar('nll', self.nll),
                 tf.summary.scalar('loss', self.loss)
@@ -69,8 +83,10 @@ class VariationalAutoEncoder(object):
         self.log_q_z_x = encoder.sample_and_log_prob(x)[1]
 
     def _create_session(self, logdir):
+        #writes summary to file
         self.summary_writer = tf.summary.FileWriter(logdir=logdir)
-        self.sess = gpu_session()
+        self.sess = gpu_session() #comes from utils.py in tfutils   tf.Session(config=tf.ConfigProto(gpu_options=gpu_options, allow_soft_placement=True))
+        #saves and restores variables
         self.saver = tf.train.Saver()
         self.logdir = logdir
 
@@ -94,11 +110,11 @@ class VariationalAutoEncoder(object):
         self.sess.run(tf.global_variables_initializer())
         it = 0
         for epoch in range(num_epochs):
-            self.sess.run(self.train_init)
-            self._update_optimizer()
+            self.sess.run(self.train_init) #train_init initializes iterators on dataset
+            self._update_optimizer() #does nothing
             while True:
                 try:
-                    self._train()
+                    self._train() #runs self.trainer which applies applies gradients to computed gradients of encoder and decoder vars
                     it += 1
                     self._log(it)
                 except tf.errors.OutOfRangeError:
@@ -149,6 +165,10 @@ class VariationalAutoEncoder(object):
         for k in d.keys():
             d[k] = np.mean(d[k])
         self._write_evaluation(d)
+
+        #value of first key.
+        return d[list(d.keys())[0]]
+
 
     def _evaluate_over_train_set(self, keys, strs):
         self.sess.run(self.train_init)
@@ -209,6 +229,7 @@ class VariationalAutoEncoder(object):
             try:
                 z, lqzx, qu0, qu1, y = self.sess.run([z_var, qzx_var, qu0_var, qu1_var, y_var])
                 mi = lqzx - (z * np.log(zs) + (1.0 - z) * np.log(1.0 - zs))
+                #.extend() adds content to the list
                 mis.extend(mi)
                 mi = qu0 - (z * np.log(zs) + (1.0 - z) * np.log(1.0 - zs))
                 mis0.extend(mi[np.where(y == 0)])
