@@ -124,12 +124,14 @@ class VariationalAutoEncoder(object):
             if epoch % 10 == 0:
                 print("current epoch is " + str(epoch))
 
-            if epoch % 100 == 1:
-                print('Saving to: ', os.path.join(self.logdir, 'model/model.ckpt'))
-                self.saver.save(sess=self.sess, save_path=os.path.join(self.logdir, 'model/model.ckpt'))
-        self.sess.run(self.train_init)
-        print('Saving to: ', os.path.join(self.logdir, 'model/model.ckpt'))
-        self.saver.save(sess=self.sess, save_path=os.path.join(self.logdir, 'model/model.ckpt'))
+        # can save about 10 times in 1 second
+
+        #     if epoch % 10 == 1:
+        #         print('Saving to: ', os.path.join(self.logdir, 'model/model.ckpt'))
+        #         self.saver.save(sess=self.sess, save_path=os.path.join(self.logdir, 'model/model.ckpt'))
+        # self.sess.run(self.train_init)
+        # print('Saving to: ', os.path.join(self.logdir, 'model/model.ckpt'))
+        # self.saver.save(sess=self.sess, save_path=os.path.join(self.logdir, 'model/model.ckpt'))
 
     def test(self):
         print('Loading from ', os.path.join(self.logdir, 'model/model.ckpt'))

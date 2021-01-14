@@ -1,15 +1,18 @@
 import tensorflow as tf
 from tfutils import utils as tu
 import click
-from data.adult import create_adult_datasets
+from data.adult import create_adult_or_mh_datasets
 from methods import LagrangianFairTransferableAutoEncoder
 from collections import namedtuple
+import os
 import numpy as np
+from tqdm import tqdm
 
 tfd = tf.contrib.distributions
 
+# code used for both adult and mh datasets
 # True for adult dataset, False for mental health dataset
-adult_bool = True
+adult_bool = False
 
 
 # adding object in brackets does nothing in Python3, only used so code works in Python2
@@ -165,40 +168,44 @@ def main(mi, e1, e2, e3, e4, e5, disc, lag, test, gpu):
     # else:
     #     print('lag is False - running MIFR (fixed multipliers)')
 
+    if gpu == -1:
+        os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
+        device_id = tu.find_avaiable_gpu()
+    else:
+        device_id = gpu
+
+    try:
+        jobid = os.environ['SLURM_JOB_ID']
+    except:
+        jobid = '0'
+    print('Using device {}'.format(device_id))
+    os.environ["CUDA_VISIBLE_DEVICES"] = str(device_id)
+    z_dim = 10
+
+
     import time
     start_time = time.time()
 
-    #run multiple experiments with the following e1 and e2 values
-    points = np.linspace(0,2,11)
-    combinations = [(a,b) for a in points for b in points]
-    for i, j in combinations:
+    # run multiple experiments with the following e1 and e2 values
+    points = np.linspace(0, 2, 11)
+    combinations = [(a, b) for a in points for b in points]
+    # for _ in range(1):
+
+
+    # tqdm gives progress bar
+    for i, j in tqdm(combinations):
         e1 = i
         e2 = j
 
-        import os
-        if gpu == -1:
-            os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-            device_id = tu.find_avaiable_gpu()
-        else:
-            device_id = gpu
+        # train and test dataset, p(u) is bernoulli distibution of protected gender variable
+        train, test, pu = create_adult_or_mh_datasets(batch=64)
+        # print('created datasets')
 
-        try:
-            jobid = os.environ['SLURM_JOB_ID']
-        except:
-            jobid = '0'
-        print('Using device {}'.format(device_id))
-        os.environ["CUDA_VISIBLE_DEVICES"] = str(device_id)
-        z_dim = 10
-
-        #train and test dataset, p(u) is bernoulli distibution of protected gender variable
-        train, test, pu = create_adult_datasets(batch=64)
-        print('created datasets')
-
-        #named tuple is like dictionary, values can be accessed either by key or index
+        # named tuple is like dictionary, values can be accessed either by key or index
         Datasets = namedtuple('datasets', ['train', 'test'])
         datasets = Datasets(train=train, test=test)
 
-        #trainable is false if variables don't need differentiation
+        # trainable is false if variables don't need differentiation
         global_step = tf.Variable(0, trainable=False, name='global_step')
         starter_learning_rate = 0.001
         #learning rate is lowered as training progresses
@@ -213,11 +220,11 @@ def main(mi, e1, e2, e3, e4, e5, disc, lag, test, gpu):
         encoder = VariationalEncoder(z_dim=z_dim)
         decoder = VariationalDecoder(z_dim=z_dim)
         if lag:
-            print('lag is True')
+            # print('lag is True')
             #found in utils in tfutils. currectly path is hardcoded
             logdir = tu.obtain_log_path('fair/lmifr_n/adult/{}-{}-{}-{}-{}-{}-{}/'.format(mi, e1, e2, e3, e4, e5, disc))
         else:
-            print('lag is False')
+            # print('lag is False')
             logdir = tu.obtain_log_path('fair/mifr_n/adult/{}-{}-{}-{}-{}-{}-{}/'.format(mi, e1, e2, e3, e4, e5, disc))
 
         if not os.path.exists(logdir):
@@ -233,10 +240,10 @@ def main(mi, e1, e2, e3, e4, e5, disc, lag, test, gpu):
         #default is 2000
         if not test_bool:
             #train function is defined in vae.py
-            lvae.train(num_epochs=1000)
+            lvae.train(num_epochs=20)
         # lvae.test()
         lvae.evaluate_classifier()
-        tf.reset_default_graph()
+        tf.reset_default_graph() # needed to loop to run
 
     print("--- %s seconds ---" % (time.time() - start_time))
 

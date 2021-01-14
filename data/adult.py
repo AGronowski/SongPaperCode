@@ -90,7 +90,6 @@ def save_adult_datasets():
         return d.astype(np.bool), u.astype(np.bool), y.astype(np.bool)  # observation, protected, label
 
     adult_binary = transform_to_binary(adult_data, adult_labels)
-    print(adult_binary)
     adult_test_binary = transform_to_binary(adult_test, adult_labels)
 
     # export as binary pickle file
@@ -101,11 +100,8 @@ def save_adult_datasets():
         pkl.dump(adult_test_binary, f)
 
 
-def create_adult_datasets(batch=64):
-    import os
-    cwd = os.getcwd()  # Get the current working directory (cwd)
-    print(cwd)
-
+# function used for both adult and mental health dataset
+def create_adult_or_mh_datasets(batch=64):
     # adult_bool is True for adult dataset, False for mental health
     from examples.adult import adult_bool
 

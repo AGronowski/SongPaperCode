@@ -116,7 +116,7 @@ class LagrangianFairTransferableAutoEncoder(VariationalAutoEncoder):
         encoder_grads_and_vars = optimizer.compute_gradients(self.loss, encoder.vars)
         decoder_grads_and_vars = optimizer.compute_gradients(self.loss, decoder.vars)
         disc_grads_and_vars = optimizer.compute_gradients(-self.logqu - self.logqu0 - self.logqu1, encoder.discriminate_vars)
-        print(encoder.discriminate_vars)
+        #print(encoder.discriminate_vars)
 
         global_step = self.global_step
         # tf.group evaluates 2 things at once
@@ -277,12 +277,13 @@ class LagrangianFairTransferableAutoEncoder(VariationalAutoEncoder):
 
         mi_zx_u = self._estimate_conditional_mutual_information_continuous(self.z, self.logqzx, self.u, self.y)
 
+        file_name = 'results_mh_3.txt'
         try:
-            with open('results_mh_3.txt', 'a') as f:
+            with open(file_name, 'a') as f:
                 f.write('test_auc: %.8f test_dp: %.8f mi_xz_u: %.8f mi_z_u: %.8f e1:%.1f e2:%.1f  \n' %(d['test_auc'],d['test_dp'],mi_zx_u, mi_z_u,self.e1,self.e2))
         except IOError:
             print('not opened')
-        print('wrote to file')
+        print('wrote to file ' + file_name)
 
     def test(self):
         d = {'mi': self.mi, 'e1': self.e1, 'e2': self.e2, 'e3': self.e3, 'e4': self.e4, 'e5': self.e5, 'disc': self.disc}
@@ -310,7 +311,7 @@ class LagrangianFairTransferableAutoEncoder(VariationalAutoEncoder):
     def _estimate_conditional_mutual_information_continuous(self, z_var, qzx_var, u_var, y_var, label='zxiu'):
         self.sess.run(self.train_init)
         zs, mi0, mi1 = [[], []], [], []
-        print(z_var, qzx_var, u_var)
+        #print(z_var, qzx_var, u_var)
 
         from sklearn.neighbors import KernelDensity
         while True:

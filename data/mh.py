@@ -7,7 +7,7 @@ from sklearn.model_selection import train_test_split
 
 # used for saving mental_health_dataset
 # saved mental health dataset can then be used with the program for the adult dataset
-# adult variable must be set to False in data.adult and examples.adult
+# adult variable must be set to False in examples.adult
 
 
 def save_mh_datasets():
