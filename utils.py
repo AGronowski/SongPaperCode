@@ -58,6 +58,18 @@ def equalizied_opportunity(y, y_logits, u):
 
 
 def accuracy(y, y_logits):
-    y_ = (y_logits > 0.0).astype(np.float32)
+    y_ = (y_logits > 0.0).astype(np.float32) #equal to y_ in previous functions
     #number of correct predictions divided by total predictions
     return np.mean((y_ == y).astype(np.float32))
+
+def accuracy_gap(y, y_logits,u):
+    y_ = (y_logits > 0.0).astype(np.float32) #equal to y_ in previous functions
+
+    s1 = (u == 1)
+    s0 = (u == 0)
+
+    acc1 = np.sum(y_[s1] != y[s1]) / (np.sum(s1) + 1e-10)
+    acc2 = np.sum(y_[s0] != y[s0]) / (np.sum(s0) + 1e-10)
+    #number of correct predictions divided by total predictions
+
+    return np.abs(acc1 - acc2)

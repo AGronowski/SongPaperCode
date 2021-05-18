@@ -2,7 +2,7 @@ import tensorflow as tf
 import numpy as np
 import pickle as pkl
 import os
-from tfutils.utils import gpu_session
+from lag_fairness.tfutils.utils import gpu_session
 from scipy.stats import gaussian_kde
 
 #from tf_utils import logger, gpu_session, clear_dir

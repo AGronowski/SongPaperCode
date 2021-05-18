@@ -2,12 +2,12 @@ import tensorflow as tf
 import numpy as np
 from tqdm import tqdm
 
-from tfutils import logger
+from lag_fairness.tfutils import logger
 import pickle as pkl
 import os
 # from .vfae import VariationalFairClassifier, VariationalFairAutoEncoder
 from .vae import VariationalAutoEncoder
-from utils import demographic_parity, equalized_odds, equalizied_opportunity, accuracy
+from lag_fairness.utils import demographic_parity, equalized_odds, equalizied_opportunity, accuracy, accuracy_gap
 from scipy.stats import gaussian_kde
 
 tfd = tf.contrib.distributions
@@ -261,7 +261,8 @@ class LagrangianFairTransferableAutoEncoder(VariationalAutoEncoder):
             'test_dp': demographic_parity(ys_, us),
             'test_eodds': equalized_odds(ys, ys_, us),
             'test_eopp': equalizied_opportunity(ys, ys_, us),
-            'test_acc': accuracy(ys, ys_)
+            'test_acc': accuracy(ys, ys_),
+            'test_accgap': accuracy_gap(ys,ys_,us)
         })
 
         #this prints d as well as saving a pickle file
@@ -277,10 +278,10 @@ class LagrangianFairTransferableAutoEncoder(VariationalAutoEncoder):
 
         mi_zx_u = self._estimate_conditional_mutual_information_continuous(self.z, self.logqzx, self.u, self.y)
 
-        file_name = 'results_mh_3.txt'
+        file_name = 'results_mh_5.txt'
         try:
             with open(file_name, 'a') as f:
-                f.write('test_auc: %.8f test_dp: %.8f mi_xz_u: %.8f mi_z_u: %.8f e1:%.1f e2:%.1f  \n' %(d['test_auc'],d['test_dp'],mi_zx_u, mi_z_u,self.e1,self.e2))
+                f.write('test_auc: %.8f test_dp: %.8f mi_xz_u: %.8f mi_z_u: %.8f e1: %.1f e2: %.1f test_accgap: %.8f \n' %(d['test_auc'],d['test_dp'],mi_zx_u, mi_z_u,self.e1,self.e2,d['test_accgap']))
         except IOError:
             print('not opened')
         print('wrote to file ' + file_name)

@@ -103,7 +103,7 @@ def save_adult_datasets():
 # function used for both adult and mental health dataset
 def create_adult_or_mh_datasets(batch=64):
     # adult_bool is True for adult dataset, False for mental health
-    from examples.adult import adult_bool
+    from lag_fairness.examples.adult import adult_bool
 
     if adult_bool:
         # rb - read binary

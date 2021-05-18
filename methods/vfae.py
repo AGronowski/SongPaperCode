@@ -2,7 +2,7 @@ import tensorflow as tf
 import numpy as np
 from scipy.stats import gaussian_kde
 from tqdm import tqdm
-from tfutils import *
+from lag_fairness.tfutils import *
 
 
 from .vae import VariationalAutoEncoder

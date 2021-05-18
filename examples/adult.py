@@ -1,8 +1,8 @@
 import tensorflow as tf
-from tfutils import utils as tu
+from lag_fairness.tfutils import utils as tu
 import click
-from data.adult import create_adult_or_mh_datasets
-from methods import LagrangianFairTransferableAutoEncoder
+from lag_fairness.data.adult import create_adult_or_mh_datasets
+from lag_fairness.methods import LagrangianFairTransferableAutoEncoder
 from collections import namedtuple
 import os
 import numpy as np
@@ -187,7 +187,8 @@ def main(mi, e1, e2, e3, e4, e5, disc, lag, test, gpu):
     start_time = time.time()
 
     # run multiple experiments with the following e1 and e2 values
-    points = np.linspace(0, 2, 11)
+    #10 points from 0 to 2
+    points = np.linspace(0, 2, 10)
     combinations = [(a, b) for a in points for b in points]
     # for _ in range(1):
 
@@ -240,7 +241,7 @@ def main(mi, e1, e2, e3, e4, e5, disc, lag, test, gpu):
         #default is 2000
         if not test_bool:
             #train function is defined in vae.py
-            lvae.train(num_epochs=20)
+            lvae.train(num_epochs=300)
         # lvae.test()
         lvae.evaluate_classifier()
         tf.reset_default_graph() # needed to loop to run
